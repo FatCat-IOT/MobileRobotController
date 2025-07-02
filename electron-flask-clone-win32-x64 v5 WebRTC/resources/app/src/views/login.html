@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Page</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #f3f4f6;
+            position: relative;
+        }
+        .top-left, .top-right {
+            position: absolute;
+            width: 100px;
+            height: auto;
+        }
+        .top-left {
+            top: 10px;
+            left: 10px;
+        }
+        .top-right {
+            top: 10px;
+            right: 10px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .login-container, .contact-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            width: 320px;
+            text-align: center;
+            margin-top: 1rem;
+        }
+        h2 {
+            margin-bottom: 1.5rem;
+            color: #333;
+        }
+        .input-group {
+            margin-bottom: 1rem;
+            text-align: left;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+            color: #555;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+        .login-btn {
+            width: 100%;
+            padding: 10px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .login-btn:hover {
+            background: #0056b3;
+        }
+        .forgot-link {
+            display: block;
+            margin-top: 1rem;
+            color: #007bff;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .forgot-link:hover {
+            text-decoration: underline;
+        }
+        .contact-container {
+            display: none;
+        }
+    </style>
+    <script>
+        function showContactTab() {
+            document.querySelector('.login-container').style.display = 'none';
+            document.querySelector('.contact-container').style.display = 'block';
+        }
+        window.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('loginForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                // Use the API exposed by preload.js
+                const result = await window.electron.invoke('login', { username, password });
+                if (!result.success) {
+                    document.getElementById('message').textContent = result.message;
+                }
+                // On success, main process will load index.html, nothing else needed here
+            });
+        });
+    </script>
+</head>
+<body>
+    <img src="../assets/6gterralogo.webp" alt="Left Image" class="top-left">
+    <img src="../assets/HSLogo.jpg" alt="Right Image" class="top-right">
+
+
+    <div class="container">
+        <div class="login-container">
+            <h2>Login</h2>
+            <form id="loginForm">
+                <div class="input-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+                <div class="input-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <button type="submit" class="login-btn">Login</button>
+            </form>
+            <a href="#" class="forgot-link" onclick="showContactTab()">Forgot password?</a>
+        </div>
+        <div class="contact-container">
+            <h2>Contact Details</h2>
+            <p>Email: dannyabner1999@gmail.com</p>
+            <p>Phone: +123456789</p>
+            <a href="#" class="forgot-link" onclick="location.reload()">Back to Login</a>
+        </div>
+        <div id="message" style="color:red; margin-top:10px;"></div>
+    </div>
+</body>
+</html>

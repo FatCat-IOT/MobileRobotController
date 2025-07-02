@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Controller Dashboard</title>
+  <link href="../assets/styles.css" rel="stylesheet" />
+  <!-- Use local versions of libraries -->
+  <script src="libs/roslib.min.js"></script>
+</head>
+<body>
+  <!-- Header with two logos -->
+  <div class="header">
+    <img class="logo" src="../assets/HSLogo.jpg" alt="Logo 1" />
+    <img class="logo" src="../assets/6gterralogo.webp" alt="Logo 2" />
+  </div>
+
+  <div class="ping-display" id="user-server-ping">Calculating ping...</div>
+  <script>
+  async function updatePing() {
+    const res = await window.electron.invoke('ping', window.appConfig.slave_ip);
+    const pingDiv = document.getElementById('user-server-ping');
+    if (res.alive) {
+      pingDiv.textContent = 'Ping: ' + res.time + ' ms';
+    } else {
+      pingDiv.textContent = 'Ping failed';
+    }
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    updatePing();
+    setInterval(updatePing, 5000);
+  });
+</script>
+
+  <div class="container">
+    <div class="title">6G Controller Demo</div>
+
+    <div class="controls">
+      <div class="sliders">
+        <div>
+          <div class="slider-label">Linear Velocity</div>
+          <input type="range" class="slider" min="0" max="1" step="0.1" value="0" id="slider1" />
+          <span id="slider1-value" class="slider-value-box">0</span> <!-- Display slider1 value -->
+        </div>
+        <div>
+          <div class="slider-label">Angular Velocity</div>
+          <input type="range" class="slider" min="0" max="10" step="0.5" value="0" id="slider2" />
+          <span id="slider2-value" class="slider-value-box">0</span> <!-- Display slider2 value -->
+        </div>
+      </div>
+
+      <div class="control-buttons">
+        <button class="button-placeholder"></button>
+        <button onclick="sendCommand('up')" id="btn-w">W</button>
+        <button class="button-placeholder"></button>
+        <button onclick="sendCommand('left')" id="btn-a">A</button>
+        <button onclick="sendCommand('down')" id="btn-s">S</button>
+        <button onclick="sendCommand('right')" id="btn-d">D</button>
+      </div>
+    </div>
+
+    <div class="video-container">
+        <canvas id="videoCanvas" width="640" height="480" style="width:100%;max-width:600px;border:3px solid #00aaff;border-radius:10px;background:#222"></canvas>
+        <video id="dummyFeed" style="display: none;" controls autoplay muted loop>
+            <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4" />
+            Your browser does not support the video tag.
+        </video>
+    </div>
+
+    <div class="bottom-controls">
+      <button class="special-button" onclick="reconnect()">
+        <img src="../assets/reconnect-icon.png" alt="Reconnect" class="icon" />
+      </button>
+      <select id="cameraFeedSelector" onchange="changeCameraFeed()" style="padding: 5px; margin-left: 10px;">
+        <option value="original">Original Feed</option>
+        <option value="dummy">Dummy Feed</option>
+      </select>
+    </div>
+  </div>
+
+
+  <!-- Contact Modal with provided contact details -->
+  <div id="contactModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeContactModal()">&times;</span>
+      <div class="contact-container">
+        <h2>Contact Details</h2>
+        <p>Prof. Dr.-Ing. Frank Schrödel</p>
+        <p>Automatisierungstechnik/Antriebstechnik/Robotertechnik</p>
+        <p>+49 3683 688 2107</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contact Tab (Fixed at Bottom Right) -->
+  <div id="contactTab" onclick="openContactModal()">Contact</div>
+
+  <script>
+    // Connect to ROS2 bridge websocket
+    const ros = new ROSLIB.Ros({
+      url: 'ws://' + window.appConfig.slave_ip + ':9090'
+    });
+
+    ros.on('connection', function() {
+      console.log('Connected to ROS2 websocket server.');
+    });
+    ros.on('error', function(error) {
+      console.error('Error connecting to ROS2 websocket server:', error);
+    });
+    ros.on('close', function() {
+      console.log('Connection to ROS2 websocket server closed.');
+    });
+
+    // Create a publisher on /cmd_vel
+    const cmdVel = new ROSLIB.Topic({
+      ros: ros,
+      name: '/cmd_vel',
+      messageType: 'geometry_msgs/msg/Twist'
+    });
+
+    function sendCommand(direction) {
+      const linearValue = parseFloat(document.getElementById("slider1").value);
+      const angularValue = parseFloat(document.getElementById("slider2").value);
+
+      let linear = 0, angular = 0;
+      switch (direction) {
+        case "up":
+          linear = linearValue;
+          angular = 0;
+          break;
+        case "left":
+          linear = 0;
+          angular = angularValue;
+          break;
+        case "down":
+          linear = -linearValue;
+          angular = 0;
+          break;
+        case "right":
+          linear = 0;
+          angular = -angularValue;
+          break;
+      }
+
+      // Publish to ROS2
+      const twist = new ROSLIB.Message({
+        linear: { x: linear, y: 0, z: 0 },
+        angular: { x: 0, y: 0, z: angular }
+      });
+/*       for (let i = 0; i < 100; i++) {
+        cmdVel.publish(twist);
+        delay(10);
+      } */
+      cmdVel.publish(twist);
+    }
+  </script>
+
+  <script>
+// Update slider value display on input
+document.getElementById('slider1').addEventListener('input', function() {
+  document.getElementById('slider1-value').textContent = this.value;
+});
+document.getElementById('slider2').addEventListener('input', function() {
+  document.getElementById('slider2-value').textContent = this.value;
+});
+
+// Set initial values on page load
+window.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('slider1-value').textContent = document.getElementById('slider1').value;
+  document.getElementById('slider2-value').textContent = document.getElementById('slider2').value;
+});
+</script>
+
+<script>
+document.addEventListener('keydown', function(event) {
+  let slider1 = document.getElementById('slider1');
+  let slider2 = document.getElementById('slider2');
+  let changed = false;
+
+  switch(event.key) {
+    case 'ArrowUp':
+      slider1.value = Math.min(parseFloat(slider1.value) + 0.1, parseFloat(slider1.max));
+      changed = true;
+      break;
+    case 'ArrowDown':
+      slider1.value = Math.max(parseFloat(slider1.value) - 0.1, parseFloat(slider1.min));
+      changed = true;
+      break;
+    case 'ArrowRight':
+      slider2.value = Math.min(parseFloat(slider2.value) + 0.5, parseFloat(slider2.max));
+      changed = true;
+      break;
+    case 'ArrowLeft':
+      slider2.value = Math.max(parseFloat(slider2.value) - 0.5, parseFloat(slider2.min));
+      changed = true;
+      break;
+    case 'w':
+    case 'W':
+      sendCommand('up');
+      break;
+    case 'a':
+    case 'A':
+      sendCommand('left');
+      break;
+    case 's':
+    case 'S':
+      sendCommand('down');
+      break;
+    case 'd':
+    case 'D':
+      sendCommand('right');
+      break;
+  }
+
+  if (changed) {
+    document.getElementById('slider1-value').textContent = slider1.value;
+    document.getElementById('slider2-value').textContent = slider2.value;
+  }
+});
+</script>
+
+<script>
+// Open the contact modal
+function openContactModal() {
+  document.getElementById('contactModal').style.display = 'block';
+}
+
+// Close the contact modal
+function closeContactModal() {
+  document.getElementById('contactModal').style.display = 'none';
+}
+
+// Optional: Close modal when clicking outside modal content
+window.onclick = function(event) {
+  var modal = document.getElementById('contactModal');
+  if (event.target === modal) {
+    modal.style.display = "none";
+  }
+}
+
+// Access config in renderer
+console.log(window.appConfig.master_ip);
+console.log(window.appConfig.slave_ip);
+</script>
+
+<script src="libs/jsmpeg.min.js"></script>
+
+<script>
+  // Replace <robot-ip> with your relay server's IP or localhost if running locally
+  const canvas = document.getElementById('videoCanvas');
+  const wsUrl = 'ws://' + window.appConfig.slave_ip + ':8082'; // Example: ws://192.168.0.11:8082
+  const player = new JSMpeg.Player(wsUrl, { canvas });
+</script>
+</body>
+</html>
+

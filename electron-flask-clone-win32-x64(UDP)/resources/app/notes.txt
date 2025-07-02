@@ -1,0 +1,301 @@
+# Electron Flask Clone
+
+A cross-platform Electron desktop app for secure login, device control, and WebRTC video streaming, with configuration via JSON.
+
+---
+
+## 📁 Project Structure
+
+```
+electron-flask-clone/
+│
+├── package.json
+├── src/
+│   ├── main.js
+│   ├── preload.js
+│   ├── config.json
+│   └── views/
+│       ├── index.html
+│       └── login.html
+```
+
+---
+
+## 1. `package.json`
+
+Defines project metadata, dependencies, and scripts.
+
+```json
+{
+  "name": "electron-flask-clone",
+  "version": "1.0.0",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "package": "electron-packager . electron-flask-clone --platform=win32 --arch=x64 --out=dist --overwrite"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.0",
+    "bcryptjs": "^3.0.2",
+    "ping": "^0.4.4",
+    "socket.io": "^4.5.0",
+    "ws": "^8.7.0"
+  },
+  "devDependencies": {
+    "concurrently": "^7.6.0",
+    "electron": "^25.0.0",
+    "electron-builder": "^24.0.0",
+    "electron-packager": "^17.1.2"
+  },
+  "homepage": "https://github.com/yourusername/electron-flask-clone",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/electron-flask-clone.git"
+  },
+  "keywords": [
+    "electron",
+    "flask",
+    "video-streaming",
+    "websocket",
+    "authentication"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
+```
+
+---
+
+## 2. `src/config.json`
+
+Stores your network configuration.
+
+```json
+{
+  "master_ip": "10.234.3.144",
+  "slave_ip": "10.234.3.25"
+}
+```
+
+---
+
+## 3. `src/preload.js`
+
+Runs in Electron’s preload context. Exposes safe APIs and config to your renderer (HTML/JS) code.
+
+```javascript
+const { contextBridge, ipcRenderer } = require('electron');
+const fs = require('fs');
+const path = require('path');
+
+const configPath = path.join(__dirname, 'config.json');
+const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+
+contextBridge.exposeInMainWorld('appConfig', config);
+
+contextBridge.exposeInMainWorld('electron', {
+  invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args)
+});
+```
+
+- Makes `window.appConfig.master_ip` and `window.appConfig.slave_ip` available in your HTML/JS.
+- Makes `window.electron.invoke(channel, ...args)` available for IPC calls to the main process.
+
+---
+
+## 4. `src/main.js`
+
+The Electron main process script. Creates the app window, sets up the WebSocket signaling server, and handles IPC.
+
+```javascript
+const { app, BrowserWindow, ipcMain } = require('electron');
+const path = require('path');
+const WebSocket = require('ws');
+const ping = require('ping');
+const fs = require('fs');
+
+let win;
+const WS_PORT = 8082;
+
+const configPath = path.join(__dirname, 'config.json');
+const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+
+console.log('Master IP:', config.master_ip);
+console.log('Slave IP:', config.slave_ip);
+
+function createWindow() {
+  win = new BrowserWindow({
+    width: 800,
+    height: 600,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false
+    },
+  });
+
+  win.loadFile(path.join(__dirname, 'views', 'login.html'));
+}
+
+app.whenReady().then(() => {
+  createWindow();
+
+  // WebSocket server for WebRTC signaling
+  const wsServer = new WebSocket.Server({ port: WS_PORT, host: '0.0.0.0' });
+
+  wsServer.on('connection', (ws) => {
+    console.log('WebSocket client connected');
+    ws.on('message', (msg) => {
+      // Broadcast signaling messages to all other clients
+      wsServer.clients.forEach(client => {
+        if (client !== ws && client.readyState === WebSocket.OPEN) {
+          client.send(msg);
+        }
+      });
+    });
+  });
+
+  console.log(`WebSocket signaling server listening on ws://localhost:${WS_PORT}`);
+});
+
+// Handle login from renderer
+ipcMain.handle('login', async (event, { username, password }) => {
+  if (username === 'danny' && password === '123') {
+    win.loadFile(path.join(__dirname, 'views', 'index.html'));
+    return { success: true };
+  } else {
+    return { success: false, message: 'Invalid credentials' };
+  }
+});
+
+// Handle ping requests from renderer
+ipcMain.handle('ping', async (event, ip) => {
+  const res = await ping.promise.probe(ip);
+  return res;
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit();
+});
+```
+
+---
+
+## 5. `src/views/login.html`
+
+The login page. Uses the exposed `window.electron.invoke` to send login requests to the main process.
+
+```html
+<script>
+    window.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            // Use the API exposed by preload.js
+            const result = await window.electron.invoke('login', { username, password });
+            if (!result.success) {
+                document.getElementById('message').textContent = result.message;
+            }
+            // On success, main process will load index.html, nothing else needed here
+        });
+    });
+</script>
+```
+
+---
+
+## 6. `src/views/index.html`
+
+The main dashboard page. Can access config and communicate with the main process.
+
+```html
+<script>
+// Access config in renderer
+console.log(window.appConfig.master_ip);
+console.log(window.appConfig.slave_ip);
+
+// Example: Ping the slave IP
+async function updatePing() {
+  const res = await window.electron.invoke('ping', window.appConfig.slave_ip);
+  const pingDiv = document.getElementById('user-server-ping');
+  if (res.alive) {
+    pingDiv.textContent = 'Ping: ' + res.time + ' ms';
+  } else {
+    pingDiv.textContent = 'Ping failed';
+  }
+}
+</script>
+```
+
+---
+
+## 7. WebRTC Signaling
+
+- The WebSocket server in `main.js` (port 8082) is used for WebRTC signaling.
+- Your ROS node or other peer connects to this server to exchange offers, answers, and ICE candidates for WebRTC video streaming.
+
+---
+
+## How Everything Works
+
+1. **App Launches:**  
+   Electron runs `main.js`, which loads config, creates the window, and starts the WebSocket signaling server.
+
+2. **Login:**  
+   The user logs in via `login.html`. The renderer sends credentials to the main process using `window.electron.invoke('login', ...)`.
+
+3. **Main Dashboard:**  
+   On successful login, `index.html` is loaded.  
+   - It can access config via `window.appConfig`.
+   - It can ping devices via `window.electron.invoke('ping', ...)`.
+   - It can receive video via WebRTC (signaling handled by the WebSocket server).
+
+4. **WebRTC Streaming:**  
+   - Your ROS node (or other peer) connects to the signaling server and exchanges WebRTC messages.
+   - The video stream is displayed in the dashboard.
+
+---
+
+## Key Concepts
+
+- **Main Process:** Runs `main.js`, manages windows, system events, and backend logic.
+- **Preload Script:** Runs in a secure context, exposes safe APIs and config to the renderer.
+- **Renderer Process:** Runs your HTML/JS UI, uses exposed APIs to interact with the main process.
+- **IPC (Inter-Process Communication):** Used for secure communication between renderer and main process.
+- **WebRTC Signaling:** Uses a WebSocket server to exchange connection info for video streaming.
+
+---
+
+## Customization Tips
+
+- **Change IPs:** Edit `src/config.json`.
+- **Add more config:** Add fields to `config.json` and they’ll be available in `window.appConfig`.
+- **Add more IPC handlers:** In `main.js`, use `ipcMain.handle(...)` for new commands.
+- **Secure login:** Replace the hardcoded username/password with a real authentication system if needed.
+- **UI changes:** Edit `index.html` and `login.html` as desired.
+
+---
+
+## Troubleshooting
+
+- **`fs` or `path` errors in preload:**  
+  Make sure you are not bundling `preload.js` and only referencing it in `main.js`.
+
+- **`window.electron` or `window.appConfig` undefined:**  
+  Ensure your `preload.js` exposes them and is loaded via `webPreferences.preload`.
+
+- **WebRTC not working:**  
+  Make sure your signaling server is running and accessible, and your ROS node is connecting to the correct IP/port.
+
+---
+
+## License
+
+MIT
+
+---
+
+**For any questions or further explanations, check the code comments or open an issue!**

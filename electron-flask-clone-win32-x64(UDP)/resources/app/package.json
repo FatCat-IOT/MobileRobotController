@@ -1,0 +1,37 @@
+{
+  "name": "electron-flask-clone",
+  "version": "1.0.0",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "package": "electron-packager . electron-flask-clone --platform=win32 --arch=x64 --out=dist --overwrite"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.0",
+    "bcryptjs": "^3.0.2",
+    "ping": "^0.4.4",
+    "socket.io": "^4.5.0",
+    "ws": "^8.7.0"
+  },
+  "devDependencies": {
+    "concurrently": "^7.6.0",
+    "electron": "^25.0.0",
+    "electron-builder": "^24.0.0",
+    "electron-packager": "^17.1.2"
+  },
+  "homepage": "https://github.com/yourusername/electron-flask-clone",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/electron-flask-clone.git"
+  },
+  "keywords": [
+    "electron",
+    "flask",
+    "video-streaming",
+    "websocket",
+    "authentication"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
